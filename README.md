@@ -48,7 +48,7 @@ cp .env.example .env
 - `BOT_TOKEN` — токен от `@BotFather`.
 - `GEMINI_API_KEY` — ключ Google Gemini API из Google AI Studio.
 - `OWNER_ID` — числовой Telegram ID владельца аккаунта (не username).
-- `GEMINI_MODEL` — по умолчанию `gemini-2.5-flash`.
+- `GEMINI_MODEL` — по умолчанию `gemini-3.5-flash-lite`.
 
 Затем запустите:
 

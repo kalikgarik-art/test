@@ -23,7 +23,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", "data/business_bot.sqlite3"))
 EXPORT_DIR = Path(os.getenv("EXPORT_DIR", "data/exports"))
 
