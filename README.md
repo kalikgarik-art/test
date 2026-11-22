@@ -14,16 +14,32 @@
 
 ## Установка и запуск
 
-Нужен Python 3.10+ (рекомендуется 3.11+).
+Нужен Python **3.10–3.14** (рекомендуется 3.11–3.14). Python 3.15 пока не поддерживается зависимостями проекта: `pip` сообщит `Requires-Python ... <3.15` и не найдёт подходящую версию aiogram.
+
+Сначала проверьте версию:
+
+```powershell
+python --version
+py -0p
+```
+
+Если у вас Python 3.15, установите Python 3.14 или 3.13 и создайте окружение именно этой версией (Windows PowerShell):
+
+```powershell
+py -3.14 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Linux/macOS:
 
 ```bash
-python -m venv .venv
-# Linux/macOS:
+python3.14 -m venv .venv
 source .venv/bin/activate
-# Windows PowerShell:
-# .venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
