@@ -22,11 +22,16 @@
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
-3. Задайте токен и запустите:
+3. Создайте в корне проекта файл `.env` (рядом с `bot.py`) и добавьте строку:
+   ```env
+   BOT_TOKEN=токен_от_BotFather
+   ```
+   Затем установите зависимости и запустите бота:
    ```bash
-   export BOT_TOKEN='токен_от_BotFather'
+   pip install -r requirements.txt
    python bot.py
    ```
+   Файл `.env` исключён из Git, поэтому токен не попадёт в коммит.
 
 ## Установка и запуск — Windows
 
@@ -40,9 +45,13 @@
    .\.venv\Scripts\Activate.ps1
    pip install -r requirements.txt
    ```
-4. Установите токен и запустите:
+4. Создайте рядом с `bot.py` файл `.env` (не `.env.txt`) со строкой:
+   ```env
+   BOT_TOKEN=токен_от_BotFather
+   ```
+   Установите зависимости и запустите бота:
    ```powershell
-   $env:BOT_TOKEN = 'токен_от_BotFather'
+   pip install -r requirements.txt
    python bot.py
    ```
 

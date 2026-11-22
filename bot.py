@@ -9,10 +9,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ChatAction
 from aiogram.filters import CommandStart
 from aiogram.types import FSInputFile, Message
+
+# Load BOT_TOKEN (and optional FFMPEG_PATH) from a .env file in the project directory.
+load_dotenv()
 
 # Telegram's standard hosted Bot API download limit.
 MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
