@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 import time
@@ -9,6 +10,7 @@ from collections.abc import Callable
 from decimal import Decimal, InvalidOperation
 
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, ReplyParameters, User
 
 from database import (
@@ -32,6 +34,7 @@ from games import (
 _MONEY_RE = re.compile(r"^\d+(?:[.,]\d{1,2})?$")
 _COEFFICIENT_RE = re.compile(r"^\d+(?:[.,]\d{1,2})?$")
 _COMMAND_RE = re.compile(r"^\s*\.([^\s]+)(?:\s+(.*))?$", re.DOTALL)
+_LOGGER = logging.getLogger(__name__)
 
 
 class CommandInputError(ValueError):
@@ -121,7 +124,34 @@ async def _send(message: Message, text: str) -> None:
     business_connection_id = getattr(message, "business_connection_id", None)
     if business_connection_id:
         kwargs["business_connection_id"] = business_connection_id
-    await message.bot.send_message(**kwargs)  # type: ignore[arg-type]
+    try:
+        await message.bot.send_message(**kwargs)  # type: ignore[arg-type]
+    except TelegramBadRequest as exc:
+        message_text = str(exc)
+        business_errors = {
+            "BUSINESS_PEER_INVALID": (
+                "This chat is not permitted for the connected business bot. "
+                "Check Telegram Settings → Telegram Business → Chatbots, enable "
+                "reply permission, and include this chat in the bot's allowed chats."
+            ),
+            "BUSINESS_PEER_USAGE_MISSING": (
+                "The user must recently message the business account before the bot can reply."
+            ),
+            "BUSINESS_CONNECTION_INVALID": (
+                "The business connection is invalid or stale; reconnect the bot in Telegram Business."
+            ),
+        }
+        for error_code, hint in business_errors.items():
+            if error_code in message_text:
+                _LOGGER.error(
+                    "Telegram Business reply failed (%s), chat_id=%s, connection_id=%s. %s",
+                    error_code,
+                    message.chat.id,
+                    business_connection_id,
+                    hint,
+                )
+                return
+        raise
 
 
 def _help_text() -> str:
