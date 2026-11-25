@@ -27,8 +27,11 @@ public:
   }
 
   void Render(bool autoscroll, float height) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
     ImGui::BeginChild("##ConsoleBody", ImVec2(0, height), ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::PopStyleVar(2);
     for (const auto& e : logs_) {
       ImGui::TextColored(TagColor(e.tag), TagName(e.tag));
       ImGui::SameLine(0, 6);

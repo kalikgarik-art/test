@@ -3,6 +3,7 @@
 // app.h — состояние приложения (App) и общие глобалы окна.
 // Реализация отрисовки интерфейса — в ui.h (App::Render и Draw* функции).
 // ---------------------------------------------------------------------------
+#include <map>
 #include <string>
 #include <vector>
 #ifndef WIN32_LEAN_AND_MEAN
@@ -43,11 +44,13 @@ struct App {
   Console console;
   CodeEditor editor;
 
-  ImFont* uiFont = nullptr;   // Segoe UI
-  ImFont* monoFont = nullptr; // Consolas
+  ImFont* uiFont = nullptr;     // Segoe UI
+  ImFont* uiBoldFont = nullptr; // Segoe UI Semibold (optional)
+  ImFont* monoFont = nullptr;   // Consolas
 
   ImVec4 accent = Theme::Accent;
   float rounding = 8.0f;
+  std::map<ImGuiID, float> animState; // плавные hover/active-переходы
 
   bool attached = false;      // состояние "подключения" (Attach)
   bool autoscroll = true;     // автопрокрутка консоли

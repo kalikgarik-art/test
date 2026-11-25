@@ -40,8 +40,11 @@ public:
     bool edited = false;
 
     // --- Гуттер с номерами строк (скролл берём с прошлого кадра) ---
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
     ImGui::BeginChild("##Gutter", ImVec2(gutterW, sz.y), ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleVar(2);
     {
       ImDrawList* dl = ImGui::GetWindowDrawList();
       ImVec2 base = ImGui::GetCursorScreenPos();
@@ -64,8 +67,11 @@ public:
 
     // --- Область кода ---
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Theme::BgDark);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
     ImGui::BeginChild("##Editor", ImVec2(sz.x - gutterW, sz.y), ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::PopStyleVar(2);
     {
       ImVec2 avail = ImGui::GetContentRegionAvail();
       ImVec2 content = ImGui::CalcTextSize(buffer.c_str(), buffer.c_str() + buffer.size(),

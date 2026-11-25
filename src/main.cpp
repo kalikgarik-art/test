@@ -24,6 +24,7 @@
 #include <windows.h>
 #include <d3d11.h>
 #include <dwmapi.h>
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 #ifndef IMGUI_DEFINE_MATH_OPERATORS
@@ -116,68 +117,88 @@ static bool CreateDeviceD3D(HWND hwnd) {
   return true;
 }
 
-// Borderless-окно: перетаскивание за заголовок, ресайз за края,
-// двойной клик по заголовку — развернуть/свернуть.
+// Перетаскивание начинается только в пустой части заголовка. Вызов
+// WM_NCLBUTTONDOWN передаёт drag системе Windows — это избегает ручного
+// SetWindowPos-цикла и сохраняет штатное «прилипание»/возврат окна.
+static bool IsTitlebarControlPoint(const ImVec2& point) {
+  for (const UiRect& rect : g_titlebarButtons)
+    if (rect.Contains(point)) return true;
+  return false;
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+  // Обрабатываем drag до передачи мыши в ImGui, чтобы пустая область
+  // заголовка не захватывалась невидимым виджетом.
+  if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK) {
+    POINT screen{};
+    if (GetCursorPos(&screen)) {
+      POINT client = screen;
+      ScreenToClient(hwnd, &client);
+      ImVec2 point((float)client.x, (float)client.y);
+      if (g_titlebarRect.Contains(point) && !IsTitlebarControlPoint(point)) {
+        if (msg == WM_LBUTTONDBLCLK) {
+          ToggleMaximize(hwnd);
+          return 0;
+        }
+        ReleaseCapture();
+        SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION,
+                     MAKELPARAM(screen.x, screen.y));
+        return 0;
+      }
+    }
+  }
+
   if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam)) return true;
 
   switch (msg) {
     case WM_NCHITTEST: {
-      POINT pt;
-      pt.x = (LONG)(short)LOWORD(lParam);
-      pt.y = (LONG)(short)HIWORD(lParam);
-      // Win32 передаёт WM_NCHITTEST в экранных координатах, а ImGui
-      // main viewport хранит геометрию в координатах клиентской области.
+      POINT pt{(LONG)(short)LOWORD(lParam), (LONG)(short)HIWORD(lParam)};
+      // WM_NCHITTEST coordinates are screen-relative; the resize edges below
+      // and Dear ImGui item rectangles are client-relative.
       ScreenToClient(hwnd, &pt);
-      ImVec2 mp((float)pt.x, (float)pt.y);
 
-      // Ресайз должен иметь приоритет над заголовком у верхней кромки.
-      // WS_THICKFRAME оставляет системе штатную обработку этих HT-кодов;
-      // WM_NCCALCSIZE ниже при этом скрывает стандартную рамку.
+      // WS_THICKFRAME + HT* provide native resize cursors and hit tracking.
       if (!IsZoomed(hwnd)) {
-        RECT rc;
+        RECT rc{};
         GetClientRect(hwnd, &rc);
-        const int B = 6;
-        int w = rc.right - rc.left;
-        int h = rc.bottom - rc.top;
-        bool l = pt.x < B;
-        bool r = pt.x >= w - B;
-        bool t = pt.y < B;
-        bool b = pt.y >= h - B;
-        if (t && l) return HTTOPLEFT;
-        if (t && r) return HTTOPRIGHT;
-        if (b && l) return HTBOTTOMLEFT;
-        if (b && r) return HTBOTTOMRIGHT;
-        if (l) return HTLEFT;
-        if (r) return HTRIGHT;
-        if (t) return HTTOP;
-        if (b) return HTBOTTOM;
+        constexpr int kResizeBorder = 6;
+        const int width = rc.right - rc.left;
+        const int height = rc.bottom - rc.top;
+        const bool left = pt.x < kResizeBorder;
+        const bool right = pt.x >= width - kResizeBorder;
+        const bool top = pt.y < kResizeBorder;
+        const bool bottom = pt.y >= height - kResizeBorder;
+        if (top && left) return HTTOPLEFT;
+        if (top && right) return HTTOPRIGHT;
+        if (bottom && left) return HTBOTTOMLEFT;
+        if (bottom && right) return HTBOTTOMRIGHT;
+        if (left) return HTLEFT;
+        if (right) return HTRIGHT;
+        if (top) return HTTOP;
+        if (bottom) return HTBOTTOM;
       }
-      // Кнопки заголовка — обычная клиентская область.
-      for (const auto& r : g_titlebarButtons)
-        if (r.Contains(mp)) return HTCLIENT;
-      // Остальной заголовок — перетаскивание окна.
-      if (g_titlebarRect.Contains(mp)) return HTCAPTION;
+      // Keep the entire custom title bar client-side; blank-space drag is
+      // explicitly started above, while buttons remain regular ImGui items.
       return HTCLIENT;
     }
     case WM_NCLBUTTONDBLCLK: {
-      POINT pt;
-      pt.x = (LONG)(short)LOWORD(lParam);
-      pt.y = (LONG)(short)HIWORD(lParam);
+      POINT pt{(LONG)(short)LOWORD(lParam), (LONG)(short)HIWORD(lParam)};
       ScreenToClient(hwnd, &pt);
-      if (g_titlebarRect.Contains(ImVec2((float)pt.x, (float)pt.y)))
+      ImVec2 point((float)pt.x, (float)pt.y);
+      if (g_titlebarRect.Contains(point) && !IsTitlebarControlPoint(point))
         ToggleMaximize(hwnd);
       return 0;
     }
     case WM_NCCALCSIZE:
       // Клиентская область растягивается на всё окно: системная рамка скрыта.
-      return 0;
+      if (wParam) return 0;
+      break;
     case WM_GETMINMAXINFO: {
       auto* mmi = reinterpret_cast<MINMAXINFO*>(lParam);
       mmi->ptMinTrackSize.x = 900;
       mmi->ptMinTrackSize.y = 600;
       HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-      MONITORINFO mi;
+      MONITORINFO mi{};
       mi.cbSize = sizeof(mi);
       if (GetMonitorInfoW(mon, &mi)) {
         mmi->ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
@@ -186,6 +207,37 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         mmi->ptMaxSize.y = mi.rcWork.bottom - mi.rcWork.top;
       }
       return 0;
+    }
+    case WM_MOVING: {
+      // Оставляем на рабочем столе заголовок и не менее 120 px ширины окна,
+      // чтобы его всегда можно было вернуть на экран после перетаскивания.
+      auto* moving = reinterpret_cast<RECT*>(lParam);
+      POINT cursor{};
+      if (GetCursorPos(&cursor)) {
+        HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi{};
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoW(monitor, &mi)) {
+          const int width = moving->right - moving->left;
+          const int height = moving->bottom - moving->top;
+          const int visibleWidth = (width < 240) ? width / 2 : 120;
+          const int leftMin = mi.rcWork.left - width + visibleWidth;
+          const int leftMax = mi.rcWork.right - visibleWidth;
+          const int topMin = mi.rcWork.top;
+          const int topMax = mi.rcWork.bottom - 48;
+          const int left = (moving->left < leftMin) ? leftMin
+                           : (moving->left > leftMax) ? leftMax
+                                                     : moving->left;
+          const int top = (moving->top < topMin) ? topMin
+                          : (moving->top > topMax) ? topMax
+                                                  : moving->top;
+          moving->left = left;
+          moving->right = left + width;
+          moving->top = top;
+          moving->bottom = top + height;
+        }
+      }
+      return TRUE;
     }
     case WM_SIZE: {
       if (wParam != SIZE_MINIMIZED && g_device && g_swapChain) {
@@ -220,7 +272,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
 
   WNDCLASSEXW wc = {};
   wc.cbSize = sizeof(wc);
-  wc.style = CS_CLASSDC;
+  wc.style = CS_CLASSDC | CS_DBLCLKS;
   wc.lpfnWndProc = WndProc;
   wc.hInstance = hInstance;
   wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
@@ -228,14 +280,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
   wc.lpszClassName = L"MindWorkspace";
   RegisterClassExW(&wc);
 
-  const int W = 1280, H = 800;
-  const int X = (GetSystemMetrics(SM_CXSCREEN) - W) / 2;
-  const int Y = (GetSystemMetrics(SM_CYSCREEN) - H) / 2;
+  const int screenW = GetSystemMetrics(SM_CXSCREEN);
+  const int screenH = GetSystemMetrics(SM_CYSCREEN);
+  const int W = std::min(1280, std::max(900, screenW - 64));
+  const int H = std::min(800, std::max(600, screenH - 64));
+  const int X = std::max(0, (screenW - W) / 2);
+  const int Y = std::max(0, (screenH - H) / 2);
   HWND hwnd = CreateWindowExW(0, wc.lpszClassName, L"Mind \x2014 workspace",
                               WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX |
                                   WS_VISIBLE | WS_CLIPCHILDREN,
                               X, Y, W, H, nullptr, nullptr, wc.hInstance, nullptr);
   if (!hwnd) return 1;
+  // Современные скруглённые углы Windows 11; на более старых Windows
+  // неподдерживаемый атрибут просто игнорируется.
+  const DWORD roundedCorners = 2; // DWMWCP_ROUND
+  DwmSetWindowAttribute(hwnd, static_cast<DWORD>(33),
+                        &roundedCorners, sizeof(roundedCorners)); // DWMWA_WINDOW_CORNER_PREFERENCE
   if (!CreateDeviceD3D(hwnd)) {
     DestroyWindow(hwnd);
     UnregisterClassW(wc.lpszClassName, wc.hInstance);
@@ -252,18 +312,25 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
   io.LogFilename = nullptr;
 
   App app;
-  static const ImWchar glyphRanges[] = {
-      0x0020, 0x00FF, // ASCII + Latin supplement
-      0x0400, 0x04FF, // Cyrillic
-      0x2000, 0x206F, // typographic punctuation (en/em dash)
-      0x25A1, 0x25A1, // outline square used by the title-bar controls
-      0};
+  // GetGlyphRangesCyrillic includes Latin and Cyrillic; add the title's
+  // typographic dash explicitly so it is not replaced by a missing-glyph box.
+  static ImVector<ImWchar> glyphRangeStorage;
+  ImFontGlyphRangesBuilder glyphBuilder;
+  glyphBuilder.AddRanges(io.Fonts->GetGlyphRangesCyrillic());
+  glyphBuilder.AddText("Mind \xE2\x80\x94 workspace Search scripts");
+  glyphBuilder.BuildRanges(&glyphRangeStorage);
+  const ImWchar* glyphRanges = glyphRangeStorage.Data;
+
   app.uiFont = io.Fonts->AddFontFromFileTTF(
       "C:\\Windows\\Fonts\\segoeui.ttf", 14.0f, nullptr, glyphRanges);
   if (!app.uiFont) app.uiFont = io.Fonts->AddFontDefault();
+  app.uiBoldFont = io.Fonts->AddFontFromFileTTF(
+      "C:\\Windows\\Fonts\\seguisb.ttf", 14.0f, nullptr, glyphRanges);
+  if (!app.uiBoldFont) app.uiBoldFont = app.uiFont;
   app.monoFont = io.Fonts->AddFontFromFileTTF(
       "C:\\Windows\\Fonts\\consola.ttf", 15.0f, nullptr, glyphRanges);
   if (!app.monoFont) app.monoFont = app.uiFont;
+  io.FontDefault = app.uiFont;
 
   ImGui::StyleColorsDark();
   ApplyTheme(app.accent, app.rounding);
@@ -276,6 +343,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
     if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
+      continue;
+    }
+    if (IsIconic(hwnd)) {
+      WaitMessage();
       continue;
     }
     ImGui_ImplDX11_NewFrame();
