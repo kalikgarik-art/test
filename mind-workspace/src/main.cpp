@@ -21,8 +21,12 @@
 //  Сборка: см. README.md (Visual Studio 2022 / CMake / MinGW).
 // ============================================================================
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <windowsx.h>
 #include <d3d11.h>
@@ -41,6 +45,10 @@
 #include <string>
 #include <vector>
 
+// В ImGui 1.9x операторы математики ImVec2 (+, -, *) по умолчанию выключены,
+// чтобы не засорять пользовательское пространство имён. Наш код их использует,
+// поэтому включаем их документированным способом — ДО включения imgui.h.
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
